@@ -8,5 +8,4 @@ public class LeaderValues {
     // INVARIANT: if amLeader = false, okayCount = 0
     int okayCount = 0;
 
-    String hostToAdd;
 }

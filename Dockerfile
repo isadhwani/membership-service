@@ -43,6 +43,9 @@ FROM amazoncorretto:17
 WORKDIR /app/
 
 ADD src/main/java/local/Main.java /app/local/
+ADD src/main/java/local/UDPBroadcastHeartbeat.java /app/local/
+ADD src/main/java/local/UDPListenHeartbeat.java /app/local/
+ADD src/main/java/local/FailureDetector.java /app/local/
 ADD src/main/java/local/LeaderValues.java /app/local/
 ADD src/main/java/local/StateValue.java /app/local/
 ADD src/main/java/local/TCPConnection.java /app/local/
@@ -52,6 +55,9 @@ ADD src/main/java/local/TCPTalker.java /app/local/
 
 ADD /docker-compose-testcases-and-hostsfile-lab3/hostsfile.txt /app/
 
+RUN javac /app/local/UDPBroadcastHeartbeat.java
+RUN javac /app/local/UDPListenHeartbeat.java
+RUN javac /app/local/FailureDetector.java
 RUN javac /app/local/LeaderValues.java
 RUN javac /app/local/StateValue.java
 RUN javac /app/local/TCPListener.java

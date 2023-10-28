@@ -15,7 +15,7 @@ import java.util.List;
 public class Main {
     public static void main( String[] args ) {
         int joinDelay = 0;
-        int crashDelay = 0;
+        int crashDelay = -1;
         String hostsfile = "";
 
         for (int i = 0; i < args.length; i++) {
@@ -39,9 +39,9 @@ public class Main {
         }
 
         // Print the extracted values
-        System.out.println("Hostname: " + hostsfile);
-        System.out.println("Start Delay: " + joinDelay);
-        System.out.println("Crash Delay: " + crashDelay);
+        //System.out.println("Hostname: " + hostsfile);
+        //System.out.println("Start Delay: " + joinDelay);
+        //System.out.println("Crash Delay: " + crashDelay);
 
 
         // Change to "hostsname.txt" when running on Docker
@@ -73,12 +73,12 @@ public class Main {
         int numHosts = peers.size();
 
         // Each peer has a tcp connection to all other peers, ordered by the order in hostsfile.txt
-        TCPConnection[] tcpConnections = new TCPConnection[numHosts];
+        TCPConnection[] tcpConnections = new TCPConnection[numHosts - 1];
 
         // Array to keep track of ports to connect each peer to all others.
         int[][] outGoingTCPPortTable = new int[numHosts][numHosts];
 
-        int port = 4950;
+        int port = 4900;
         for (int r = 0; r < 5; r++) {
             for (int c = 0; c < 5; c++) {
                 outGoingTCPPortTable[r][c] = port;
@@ -86,31 +86,49 @@ public class Main {
             }
         }
 
-        for (int i = 0; i < peers.size(); i++) {
-            String connectedPeer = peers.get(i);
+        int failureDetectorStartPort = 5000;
+        int myBroadcastPort = failureDetectorStartPort + myPeerIndex + 1;
+        UDPBroadcastHeartbeat broadcastHeartbeat = new UDPBroadcastHeartbeat(state, myHostname, myBroadcastPort);
+        UDPListenHeartbeat[] heartbeatListeners = new UDPListenHeartbeat[numHosts - 1];
 
-            if(connectedPeer.equals(myHostname)) {
+
+
+
+        int index = 0;
+        int tcpIndex = 0;
+        // Start a broadcast listener for each peer (not including myself)
+        // Start TCP connections for each to the leader, leader needs to connect to everything
+        while (index < peers.size()) {
+            String connectedPeer = peers.get(index);
+
+            if (connectedPeer.equals(myHostname)) {
+                index++;
                 continue;
             }
 
-            TCPListener listen = new TCPListener(state, myHostname, connectedPeer,  outGoingTCPPortTable[i][myPeerIndex]);
-            TCPTalker talk = new TCPTalker(state, connectedPeer, myHostname, outGoingTCPPortTable[myPeerIndex][i]);
+            TCPListener listen = new TCPListener(state, myHostname, connectedPeer, outGoingTCPPortTable[index][myPeerIndex]);
+            TCPTalker talk = new TCPTalker(state, connectedPeer, myHostname, outGoingTCPPortTable[myPeerIndex][index]);
 
             TCPConnection connection = new TCPConnection(talk, listen);
-            tcpConnections[i] = connection;
+            tcpConnections[tcpIndex] = connection;
+
+            UDPListenHeartbeat udpListenHeartbeat= new UDPListenHeartbeat(state, failureDetectorStartPort + index + 1, connectedPeer);
+            heartbeatListeners[tcpIndex] = udpListenHeartbeat;
+
+            tcpIndex++;
+            index++;
         }
 
+        // Start TCP connections to leader
         TCPConnection leaderConnection = tcpConnections[0];
 
         if(state.amLeader) {
             state.sentJoinRequest = true;
             state.leaderValues = new LeaderValues();
+            state.members.add(myHostname);
 
             // Establish TCP listeners to all peers
             for(int i = 0; i < tcpConnections.length; i++) {
-                if(i == myPeerIndex) {
-                    continue;
-                }
                 tcpConnections[i].listener.start();
             }
 
@@ -118,9 +136,6 @@ public class Main {
 
             // Establish TCP talkers to all peers
             for(int i = 0; i < tcpConnections.length; i++) {
-                if(i == myPeerIndex) {
-                    continue;
-                }
                 tcpConnections[i].talker.start();
             }
 
@@ -128,6 +143,7 @@ public class Main {
             // Establish UDP talkers to all peers
 
         } else {
+            state.members.add(leader);
 
             // Connection to leader should always be the first index of connections array, as nothing
             // at this point has crashed and the leader is the lowest index.
@@ -136,13 +152,15 @@ public class Main {
 
             sleep(1);
             leaderConnection.talker.start();
-
-            // Establish TCP talker to leader
-            // Establish TCP listener to leader
-
-            // Establish UDP talker to leader
-            // Establish UDP listener to leader
         }
+
+        // Start failure detectors:
+        broadcastHeartbeat.start();
+        for(UDPListenHeartbeat listenHeartbeat : heartbeatListeners) {
+            listenHeartbeat.start();
+        }
+
+
 
         // Main program loop:
 
@@ -150,20 +168,53 @@ public class Main {
             if(!state.sentJoinRequest) {
                 final int finalJoinDelay = joinDelay;
                 joinGroup(finalJoinDelay, leaderConnection);
-               // new Thread(() -> joinGroup(finalJoinDelay, leaderConnection)).start();
+
+                if(crashDelay > 0) {
+                    final int finalCrashDelay = crashDelay;
+                    new Thread(() -> crash(finalCrashDelay)).start();
+                }
+
+                state.members.add(myHostname);
                 state.sentJoinRequest = true;
             }
 
-            if(state.amLeader){
-                sleep(1);
-                System.out.println("Send add req: " + state.sendAddReq);
-            }
+
+
+
             if(state.amLeader && state.sendAddReq) {
-                System.out.println("telling all my talkers to send ADDs");
+                //System.out.println("telling all my talkers to send ADDs");
                 for(TCPConnection conn : tcpConnections) {
-                    conn.talker.sendAddReq = true;
+                    // If this talker goes to a member in the current view
+                    if(state.members.contains(conn.talker.targetHostname)) {
+                        //System.out.println(conn.talker.targetHostname + " is in the current view");
+                        conn.talker.sendAddReq = true;
+
+                    }
                 }
                 state.sendAddReq = false;
+            }
+
+            if(state.amLeader && state.peerToAdd != null) {
+                //System.out.println("Checking if we can send NEWVIEW...");
+                // If the process of adding a peer has begun, check the number of OK's received"
+
+                // If all members have sent OK, send NEWVIEW to all members. -1 because I include myself in the membership list
+                if(state.leaderValues.okayCount == state.members.size() - 1) {
+                    //System.out.println("All members have sent OK, sending NEWVIEW to all members");
+
+                    // If all members have sent OK, send NEWVIEW to all members
+                    state.leaderValues.okayCount = 0;
+                    state.members.add(state.peerToAdd);
+                    state.peerToAdd = null;
+
+                    for (TCPConnection conn : tcpConnections)
+                        if (state.members.contains(conn.talker.targetHostname))
+                            conn.talker.sendNewView = true;
+
+                    state.viewId++;
+                    state.requestId++;
+                    System.out.println("New member list: " + state.members);
+                }
             }
 
             if(state.amLeader && state.leaderValues.sendNewView) {
@@ -177,15 +228,16 @@ public class Main {
                 leaderConnection.talker.sendOkay = true;
                 state.sendOkay = false;
             }
+            sleep(0.01F);
+
         }
+
 
     }
 
     public static void joinGroup(int joinDelay, TCPConnection leaderConnection) {
         sleep(joinDelay);
-        System.out.println("Sending join request to leader: " + leaderConnection.talker.targetHostname);
         leaderConnection.talker.sendJoin = true;
-
     }
 
     public static String getMyHostname() {
@@ -221,6 +273,12 @@ public class Main {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void crash(float seconds) {
+        sleep(seconds);
+        System.out.println("Crashing...");
+        System.exit(0);
     }
 
     public static int getNextValue(int current, int peerCount) {

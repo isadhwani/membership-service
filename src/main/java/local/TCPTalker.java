@@ -27,17 +27,12 @@ public class TCPTalker extends Thread {
     boolean sendNewView = false;
 
 
-
-
-
-
     public TCPTalker(StateValue s, String targetHostname, String myHostname, int port) {
         this.state = s;
         this.targetHostname = targetHostname;
         this.port = port;
         this.myHostname = myHostname;
     }
-
 
 
     @Override
@@ -68,16 +63,14 @@ public class TCPTalker extends Thread {
                     outputStream.flush();
                     sendJoin = false;
 
-                    //Thread.sleep(2000);
-                    //System.out.println("Sent message to server: " + message);
                 } else if (sendAddReq) {
-                  String message = "{id: " + myHostname + ", requestId:" + state.requestId +
-                          ", viewId:" + state.viewId + ", hostToAdd:" + state.leaderValues.hostToAdd +
-                          ", message:ADD}";
-                  // type: "JOIN"
-                  //state.requestId++;
-                  sendAddReq = false;
+                    String message = "{id: " + myHostname + ", requestId:" + state.requestId +
+                            ", viewId:" + state.viewId + ", peerToAdd:" + state.peerToAdd +
+                            ", message:REQ, operation:ADD, operationType:ADD";
 
+                    System.out.println("Sending ADD to " + targetHostname + ": " + message);
+
+                    sendAddReq = false;
 
                     byte[] messageBytes = message.getBytes();
 
@@ -87,21 +80,29 @@ public class TCPTalker extends Thread {
                     String message = "{id: " + myHostname + ", requestId:" + state.requestId +
                             ", viewId:" + state.viewId + ", message:OK}";
 
+                    System.out.println("Sending message: " + message);
 
                     byte[] messageBytes = message.getBytes();
 
                     outputStream.write(messageBytes);
                     outputStream.flush();
-                } else if(sendNewView) {
-                    state.viewId++;
+                    this.sendOkay = false;
+                } else if (sendNewView) {
+                    String members = "";
+                    for(String m : state.members) {
+                        members += m + ";";
+                    }
                     String message = "{id: " + myHostname +
-                            ", viewId:" + state.viewId + ", message:NEWVIEW, members:" + state.members + "}";
+                            ", viewId:" + state.viewId + ", message:NEWVIEW, members:" + members + "}";
 
                     byte[] messageBytes = message.getBytes();
 
                     outputStream.write(messageBytes);
                     outputStream.flush();
+                    sendNewView = false;
                 }
+
+                sleep(1);
 
 
                 // Close the socket
@@ -109,6 +110,8 @@ public class TCPTalker extends Thread {
             } catch (UnknownHostException e) {
                 throw new RuntimeException(e);
             } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }

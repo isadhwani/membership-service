@@ -5,8 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,11 +15,13 @@ public class TCPListener extends Thread {
     StateValue state;
     int port;
     String myHostname;
+    String connectedHost;
 
     TCPListener(StateValue s, String myHostname, String connectedHost, int port) {
         this.port = port;
         this.myHostname = myHostname;
         this.state = s;
+        this.connectedHost = connectedHost;
     }
 
 
@@ -52,41 +53,27 @@ public class TCPListener extends Thread {
             String receivedMessages;
             while ((receivedMessages = reader.readLine()) != null) {
                 //System.out.println("Received from " + clientSocket.getInetAddress().getHostName() + ": " + receivedMessages);
-                System.out.println("Received: " + receivedMessages + " from " + clientSocket.getInetAddress().getHostName());
+                System.out.println("Received: " + receivedMessages + " from " + connectedHost);
 
                 String[] messages = receivedMessages.split("\\}\\{");
 
                 // if multiple messages are received at once, iterate through them
                 for (String message : messages) {
-                    // Add back the missing curly braces for each message
-
-
-
 
                     Map<String, String> decoded = decodeJSON(message);
-                    // Print out each element of map decoded:
-//                    for (Map.Entry<String, String> entry : decoded.entrySet()) {
-//                        System.out.println("Key = " + entry.getKey() +
-//                                ", Value = " + entry.getValue());
-//                    }
-
 
                     String msgType = decoded.get("message");
-                    System.out.println("Message type received: " + msgType);
 
-                    //System.out.println(message);
-                    //System.out.println("extracted msg: " + msg);
-
-                    if(msgType.equals("JOIN")) {
-                        System.out.println("Processed JOIN message, and amLeader = " + state.amLeader);
-                        if(state.amLeader) {
+                    if (msgType.equals("JOIN")) {
+                        if (state.amLeader) {
+                            System.out.println("Processed JOIN message and telling main to send ADD");
                             state.sendAddReq = true;
-                            System.out.println("TELLING MAIN TO SEND ADD REQ");
-                            System.out.println("StateID: " + this.state);
+                            state.peerToAdd = decoded.get("id");
                         }
 
-                    } else if(msgType.equals("REQ")) {
-                        if(decoded.get("operation").equals("ADD")) {
+                    } else if (msgType.equals("REQ")) {
+                        if (decoded.get("operation").equals("ADD")) {
+                            System.out.println("Received ADD request from " + decoded.get("id"));
                             state.requestId = Integer.parseInt(decoded.get("requestId"));
                             state.viewId = Integer.parseInt(decoded.get("viewId"));
                             state.operationType = decoded.get("operationType");
@@ -94,19 +81,21 @@ public class TCPListener extends Thread {
                             state.peerToAdd = decoded.get("peerToAdd");
                         }
 
-
                     } else if (state.amLeader && msgType.equals("OK")) {
                         state.leaderValues.okayCount++;
-                        if(state.leaderValues.okayCount == state.members.size()) {
-                            state.leaderValues.sendNewView = true;
-                        }
-                    } else if (msgType.equals("NEWVIEW")) {
-                        state.leaderValues.okayCount++;
-                        if(state.leaderValues.okayCount == state.members.size()) {
-                            state.leaderValues.sendNewView = true;
-                        }
-                    }
+                        //System.out.println("Received OK from " + decoded.get("id") + " and okayCount is now " + state.leaderValues.okayCount);
 
+                    } else if (msgType.equals("NEWVIEW")) {
+                        state.peerToAdd = null;
+
+                        // not sure if i should do this here
+                        state.requestId++;
+                        state.viewId++;
+
+                        List<String> list = Arrays.asList(decoded.get("members").split(";"));
+                        state.members = new ArrayList<String>(list);
+                        System.out.println("Membership: " + state.members);
+                    }
                 }
             }
 
@@ -117,23 +106,6 @@ public class TCPListener extends Thread {
     }
 
 
-    private static int extractMarkerNumber(String marker) {
-        // Define a pattern to match "peer" followed by one or more digits
-        Pattern pattern = Pattern.compile("marker(\\d+)");
-
-        // Create a matcher with the input hostName
-        Matcher matcher = pattern.matcher(marker);
-
-        // Check if the pattern is found
-        if (matcher.find()) {
-            // Extract and parse the matched digits
-            String numberString = matcher.group(1);
-            return Integer.parseInt(numberString);
-        } else {
-            // Return a default value or throw an exception, depending on your requirements
-            throw new IllegalArgumentException("Invalid host name format: " + marker);
-        }
-    }
 
     public static Map<String, String> decodeJSON(String jsonString) {
         Map<String, String> resultMap = new HashMap<>();
