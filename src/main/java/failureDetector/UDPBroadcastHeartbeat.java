@@ -1,4 +1,6 @@
-package local;
+package failureDetector;
+
+import local.StateValue;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -6,7 +8,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 public class UDPBroadcastHeartbeat extends Thread {
-    public final int HEARTBEAT_INTERVAL = 5000;
+    public final int HEARTBEAT_INTERVAL = 1000;
 
     StateValue state;
     int port;
@@ -39,10 +41,10 @@ public class UDPBroadcastHeartbeat extends Thread {
 
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
-                System.out.println("Sending heartbeat from " + myHostname + " on port " + port);
+                //System.out.println("Sending heartbeat from " + myHostname + " on port " + port);
                 socket.send(packet);
 
-                // Wait 5 seconds before sending next heartbeat
+                // Wait HEARTBEAT_INTERVAL mili seconds before sending next heartbeat
                 sleep(HEARTBEAT_INTERVAL);
             }
 

@@ -25,8 +25,12 @@ public class StateValue {
     boolean sendAddReq = false;
     boolean sendOkay = false;
 
+    public boolean sendDelReq = false;
+
     // Stores the next peer to be added, either initiated by leader or received from a ADD message
-    String peerToAdd;
+    String peerToAdd = null;
+
+    public String peerToDel = null;
 
     // INVARIANT: if amLeader = false, leaderValues = null
     LeaderValues leaderValues;

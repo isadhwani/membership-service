@@ -31,21 +31,15 @@
 
 FROM amazoncorretto:17
 
-#RUN apt-get update
-#RUN apt-get install -y gcc
-#
-#RUN apt-get install -y netcat
-#RUN apt-get install -y iputils-ping
-
-#RUN apt install default-jre
-
 
 WORKDIR /app/
 
 ADD src/main/java/local/Main.java /app/local/
-ADD src/main/java/local/UDPBroadcastHeartbeat.java /app/local/
-ADD src/main/java/local/UDPListenHeartbeat.java /app/local/
-ADD src/main/java/local/FailureDetector.java /app/local/
+ADD src/main/java/failureDetector/TimeoutData.java /app/failureDetector/
+ADD src/main/java/failureDetector/UDPBroadcastHeartbeat.java /app/failureDetector/
+ADD src/main/java/failureDetector/HandleTimeout.java /app/failureDetector/
+ADD src/main/java/failureDetector/UDPListenHeartbeat.java /app/failureDetector/
+ADD src/main/java/failureDetector/FailureDetector.java /app/failureDetector/
 ADD src/main/java/local/LeaderValues.java /app/local/
 ADD src/main/java/local/StateValue.java /app/local/
 ADD src/main/java/local/TCPConnection.java /app/local/
@@ -55,9 +49,11 @@ ADD src/main/java/local/TCPTalker.java /app/local/
 
 ADD /docker-compose-testcases-and-hostsfile-lab3/hostsfile.txt /app/
 
-RUN javac /app/local/UDPBroadcastHeartbeat.java
-RUN javac /app/local/UDPListenHeartbeat.java
-RUN javac /app/local/FailureDetector.java
+RUN javac /app/failureDetector/TimeoutData.java
+RUN javac /app/failureDetector/HandleTimeout.java
+RUN javac /app/failureDetector/UDPBroadcastHeartbeat.java
+RUN javac /app/failureDetector/UDPListenHeartbeat.java
+RUN javac /app/failureDetector/FailureDetector.java
 RUN javac /app/local/LeaderValues.java
 RUN javac /app/local/StateValue.java
 RUN javac /app/local/TCPListener.java

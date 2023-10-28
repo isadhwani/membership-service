@@ -26,6 +26,8 @@ public class TCPTalker extends Thread {
     // Invariant: if amLeader = false, sendNewView = false
     boolean sendNewView = false;
 
+    boolean sendDelReq = false;
+
 
     public TCPTalker(StateValue s, String targetHostname, String myHostname, int port) {
         this.state = s;
@@ -52,28 +54,24 @@ public class TCPTalker extends Thread {
 
                 if (sendJoin) {
 
-                    String message = "{id:" + myHostname +
-                            ", message:JOIN}";
+                    String message = "{id:" + myHostname + ", message:JOIN}";
 
                     System.out.println("Sending JOIN to server: " + message);
                     byte[] messageBytes = message.getBytes();
-
                     outputStream.write(messageBytes);
-
                     outputStream.flush();
                     sendJoin = false;
 
                 } else if (sendAddReq) {
                     String message = "{id: " + myHostname + ", requestId:" + state.requestId +
                             ", viewId:" + state.viewId + ", peerToAdd:" + state.peerToAdd +
-                            ", message:REQ, operation:ADD, operationType:ADD";
+                            ", message:REQ, operation:ADD";
 
                     System.out.println("Sending ADD to " + targetHostname + ": " + message);
 
                     sendAddReq = false;
 
                     byte[] messageBytes = message.getBytes();
-
                     outputStream.write(messageBytes);
                     outputStream.flush();
                 } else if (sendOkay) {
@@ -87,6 +85,7 @@ public class TCPTalker extends Thread {
                     outputStream.write(messageBytes);
                     outputStream.flush();
                     this.sendOkay = false;
+
                 } else if (sendNewView) {
                     String members = "";
                     for(String m : state.members) {
@@ -100,6 +99,19 @@ public class TCPTalker extends Thread {
                     outputStream.write(messageBytes);
                     outputStream.flush();
                     sendNewView = false;
+                } else if (sendDelReq) {
+
+                    String message = "{id: " + myHostname + ", requestId:" + state.requestId +
+                            ", viewId:" + state.viewId + ", peerToDel:" + state.peerToDel +
+                            ", message:REQ, operation:DEL}";
+
+                    System.out.println("Sending DEL to " + targetHostname + ": " + message);
+
+                    sendDelReq = false;
+
+                    byte[] messageBytes = message.getBytes();
+                    outputStream.write(messageBytes);
+                    outputStream.flush();
                 }
 
                 sleep(1);

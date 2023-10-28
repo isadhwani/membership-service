@@ -1,5 +1,8 @@
 package local;
 
+import failureDetector.UDPBroadcastHeartbeat;
+import failureDetector.UDPListenHeartbeat;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -92,8 +95,7 @@ public class Main {
         UDPListenHeartbeat[] heartbeatListeners = new UDPListenHeartbeat[numHosts - 1];
 
 
-
-
+        // TODO: Move to TCPConnection and FailureDetector class to declutter main
         int index = 0;
         int tcpIndex = 0;
         // Start a broadcast listener for each peer (not including myself)
@@ -119,7 +121,7 @@ public class Main {
             index++;
         }
 
-        // Start TCP connections to leader
+        // TODO: Move to TCPConnection and FailureDetector class to declutter main
         TCPConnection leaderConnection = tcpConnections[0];
 
         if(state.amLeader) {
@@ -154,7 +156,7 @@ public class Main {
             leaderConnection.talker.start();
         }
 
-        // Start failure detectors:
+        //TODO: Move to failure detector class so failure detector acts as it's own seperate process
         broadcastHeartbeat.start();
         for(UDPListenHeartbeat listenHeartbeat : heartbeatListeners) {
             listenHeartbeat.start();
@@ -163,7 +165,7 @@ public class Main {
 
 
         // Main program loop:
-
+        // TODO: Move to separate function
         while(true) {
             if(!state.sentJoinRequest) {
                 final int finalJoinDelay = joinDelay;
@@ -178,61 +180,83 @@ public class Main {
                 state.sentJoinRequest = true;
             }
 
-
-
-
-            if(state.amLeader && state.sendAddReq) {
-                //System.out.println("telling all my talkers to send ADDs");
-                for(TCPConnection conn : tcpConnections) {
-                    // If this talker goes to a member in the current view
-                    if(state.members.contains(conn.talker.targetHostname)) {
-                        //System.out.println(conn.talker.targetHostname + " is in the current view");
-                        conn.talker.sendAddReq = true;
-
-                    }
-                }
-                state.sendAddReq = false;
-            }
-
-            if(state.amLeader && state.peerToAdd != null) {
-                //System.out.println("Checking if we can send NEWVIEW...");
-                // If the process of adding a peer has begun, check the number of OK's received"
-
-                // If all members have sent OK, send NEWVIEW to all members. -1 because I include myself in the membership list
-                if(state.leaderValues.okayCount == state.members.size() - 1) {
-                    //System.out.println("All members have sent OK, sending NEWVIEW to all members");
-
-                    // If all members have sent OK, send NEWVIEW to all members
-                    state.leaderValues.okayCount = 0;
-                    state.members.add(state.peerToAdd);
-                    state.peerToAdd = null;
-
-                    for (TCPConnection conn : tcpConnections)
-                        if (state.members.contains(conn.talker.targetHostname))
-                            conn.talker.sendNewView = true;
-
-                    state.viewId++;
-                    state.requestId++;
-                    System.out.println("New member list: " + state.members);
-                }
-            }
-
-            if(state.amLeader && state.leaderValues.sendNewView) {
-                for(TCPConnection conn : tcpConnections) {
-                    conn.talker.sendNewView = true;
-                }
-                state.leaderValues.sendNewView = false;
-            }
-
             if(state.sendOkay) {
                 leaderConnection.talker.sendOkay = true;
                 state.sendOkay = false;
             }
+
+            // Only things the leader should check..
+            if(state.amLeader) {
+                if(state.sendAddReq) {
+                    //System.out.println("telling all my talkers to send ADDs");
+                    for(TCPConnection conn : tcpConnections) {
+                        // If this talker goes to a member in the current view
+                        if(state.members.contains(conn.talker.targetHostname)) {
+                            //System.out.println(conn.talker.targetHostname + " is in the current view");
+                            conn.talker.sendAddReq = true;
+                        }
+                    }
+                    state.sendAddReq = false;
+                }
+
+                if(state.peerToAdd != null || state.peerToDel != null) {
+                    //System.out.println("Checking if we can send NEWVIEW...");
+                    // If the process of adding a peer has begun, check the number of OK's received"
+
+                    // If we are removing a peer, the OK threshold is two less then the number of members
+                    // (-1 for myself, -1 for crashed peer)
+                    int okayThreshold = state.peerToDel != null? state.members.size() - 2 : state.members.size() -1;
+                    // If all members have sent OK, send NEWVIEW to all members. -1 because I include myself in the membership list
+                    if(state.leaderValues.okayCount == okayThreshold) {
+                        //System.out.println("All members have sent OK, sending NEWVIEW to all members");
+
+                        // If all members have sent OK, send NEWVIEW to all members
+                        // Logic to determine if we should be removing or adding a peer to membership list
+                        if(state.peerToAdd != null) {
+                            state.members.add(state.peerToAdd);
+                            state.peerToAdd = null;
+                        } else if(state.peerToDel != null) {
+                            state.members.remove(state.peerToDel);
+                            state.peerToDel = null;
+                        }
+
+                        state.leaderValues.okayCount = 0;
+
+                        for (TCPConnection conn : tcpConnections)
+                            if (state.members.contains(conn.talker.targetHostname))
+                                conn.talker.sendNewView = true;
+
+                        state.viewId++;
+                        state.requestId++;
+                        System.out.println("New member list: " + state.members);
+                    }
+                }
+
+                if(state.leaderValues.sendNewView) {
+                    for(TCPConnection conn : tcpConnections) {
+                        conn.talker.sendNewView = true;
+                    }
+                    state.leaderValues.sendNewView = false;
+                }
+
+                // Initiate DEL operation...
+                if(state.sendDelReq == true) {
+                    //TODO: Try to abstract between send ADD and send DEL reqs
+                    for(TCPConnection conn : tcpConnections) {
+                        if(state.members.contains(conn.talker.targetHostname)) {
+                            conn.talker.sendDelReq = true;
+                        }
+                    }
+                    state.sendDelReq = false;
+
+                }
+
+
+
+            }
             sleep(0.01F);
 
         }
-
-
     }
 
     public static void joinGroup(int joinDelay, TCPConnection leaderConnection) {

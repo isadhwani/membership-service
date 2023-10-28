@@ -1,4 +1,4 @@
-package local;
+package failureDetector;
 
 public class FailureDetector {
     UDPBroadcastHeartbeat sendHeartbeat;

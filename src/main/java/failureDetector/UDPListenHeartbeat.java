@@ -1,4 +1,6 @@
-package local;
+package failureDetector;
+
+import local.StateValue;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -11,16 +13,11 @@ public class UDPListenHeartbeat extends Thread {
     public StateValue state;
 
 
-    long lastHeartbeatTimestamp = 0;
-
-    // Heartbeats are sent every 5000 milliseconds, timeout is 2 heartbeats missed
-    public final int HEARTBEAT_TIMEOUT = 10000;
-
     int listenPort = 0;
 
     String listenHostname = "";
 
-    UDPListenHeartbeat(StateValue s, int listenPort, String listenHostname) {
+    public UDPListenHeartbeat(StateValue s, int listenPort, String listenHostname) {
         this.state = s;
         this.listenPort = listenPort;
         this.listenHostname = listenHostname;
@@ -28,7 +25,11 @@ public class UDPListenHeartbeat extends Thread {
 
     @Override
     public void run() {
-        System.out.println("running broadcast listener for peer " + listenHostname + " on port " + listenPort);
+        TimeoutData timeoutData = new TimeoutData(0, listenHostname);
+        HandleTimeout handleTimeout = new HandleTimeout(timeoutData, state);
+        handleTimeout.start();
+
+        //System.out.println("running broadcast listener for peer " + listenHostname + " on port " + listenPort);
         DatagramSocket socket = null;
         try {
             socket = new DatagramSocket(listenPort);
@@ -45,19 +46,10 @@ public class UDPListenHeartbeat extends Thread {
                 packet = new DatagramPacket(buf, buf.length, address, port);
                 String received = new String(packet.getData(), 0, packet.getLength());
 
-                //System.out.println("received:" + received);
-
                 long currentTime = System.currentTimeMillis();
-
-                if (currentTime - lastHeartbeatTimestamp > HEARTBEAT_TIMEOUT && lastHeartbeatTimestamp != 0) {
-                    System.out.println("Peer " + listenHostname+ " not reachable");
-                    //state.removePeer(address, port);
-
-                } else {
-                    System.out.println("Received heartbeat from " + listenHostname);
-                    System.out.println("Time between heartbeats: " + (currentTime - lastHeartbeatTimestamp));
-                    lastHeartbeatTimestamp = currentTime;
-                }
+                //System.out.println("Received heartbeat from " + listenHostname);
+                //System.out.println("Time between heartbeats: " + (currentTime - timeoutData.lastHeartbeatTimestamp));
+                timeoutData.lastHeartbeatTimestamp = currentTime;
             }
         } catch (SocketException e) {
             throw new RuntimeException(e);
@@ -65,4 +57,6 @@ public class UDPListenHeartbeat extends Thread {
             throw new RuntimeException(e);
         }
     }
+
+
 }

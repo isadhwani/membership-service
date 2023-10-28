@@ -6,8 +6,6 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class TCPListener extends Thread {
 
@@ -72,13 +70,17 @@ public class TCPListener extends Thread {
                         }
 
                     } else if (msgType.equals("REQ")) {
+                        state.requestId = Integer.parseInt(decoded.get("requestId"));
+                        state.viewId = Integer.parseInt(decoded.get("viewId"));
+                        state.operationType = decoded.get("operation");
+                        state.sendOkay = true;
+
                         if (decoded.get("operation").equals("ADD")) {
                             System.out.println("Received ADD request from " + decoded.get("id"));
-                            state.requestId = Integer.parseInt(decoded.get("requestId"));
-                            state.viewId = Integer.parseInt(decoded.get("viewId"));
-                            state.operationType = decoded.get("operationType");
-                            state.sendOkay = true;
                             state.peerToAdd = decoded.get("peerToAdd");
+                        } else if(decoded.get("operation").equals("DEL")) {
+                            System.out.println("Received DEL request from " + decoded.get("id"));
+                            state.peerToDel = decoded.get("peerToRemove");
                         }
 
                     } else if (state.amLeader && msgType.equals("OK")) {
@@ -86,7 +88,10 @@ public class TCPListener extends Thread {
                         //System.out.println("Received OK from " + decoded.get("id") + " and okayCount is now " + state.leaderValues.okayCount);
 
                     } else if (msgType.equals("NEWVIEW")) {
+                        // Becasue ADD and DEL operations cannot happen concurrently, we can assume that after receiving
+                        //  a new view that all current operations are over
                         state.peerToAdd = null;
+                        state.peerToDel = null;
 
                         // not sure if i should do this here
                         state.requestId++;
@@ -106,7 +111,6 @@ public class TCPListener extends Thread {
     }
 
 
-
     public static Map<String, String> decodeJSON(String jsonString) {
         Map<String, String> resultMap = new HashMap<>();
 
@@ -124,13 +128,6 @@ public class TCPListener extends Thread {
             String key = entry[0].trim();
             String value = entry[1].trim();
 
-            // Remove quotes if the value is a string
-//            if (value.startsWith("'") && value.endsWith("'")) {
-//                value = value.substring(1, value.length() - 1);
-//            }
-
-            // Add the key-value pair to the result map
-
             String stringWithoutSpaces = value.replaceAll("\\s", "");
 
             resultMap.put(key, stringWithoutSpaces);
@@ -138,18 +135,6 @@ public class TCPListener extends Thread {
 
         return resultMap;
     }
-
-    private static Object parseValue(String value) {
-        // Try to parse the value as an integer
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            // If parsing as an integer fails, return the value as a string
-            return value;
-        }
-    }
-
-
 }
 
 
