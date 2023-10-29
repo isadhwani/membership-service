@@ -161,14 +161,6 @@ public class Main {
 
         // Main program loop:
         // TODO: Move to separate function
-        runMembershipProtocol(state, tcpConnections, leaderConnection, joinDelay, crashDelay, myHostname, myPeerIndex, leader, numHosts, peers, crashLeaderMidSequence);
-
-    }
-
-    public static void runMembershipProtocol(StateValue state, TCPConnection[] tcpConnections,
-                                             TCPConnection leaderConnection, int joinDelay, int crashDelay,
-                                             String myHostname, int myPeerIndex, String leader, int numHosts,
-                                             List<String> peers, boolean crashLeaderMidSequence) {
         while(true) {
 
             if(crashDelay > 0) {
@@ -292,7 +284,10 @@ public class Main {
             sleep(0.01F);
 
         }
+
     }
+
+
 
     public static void joinGroup(int joinDelay, TCPConnection leaderConnection) {
         sleep(joinDelay);
