@@ -20,6 +20,7 @@ public class Main {
         int joinDelay = 0;
         int crashDelay = -1;
         String hostsfile = "";
+        boolean crashLeaderMidSequence = false;
 
         for (int i = 0; i < args.length; i++) {
             if ("-h".equals(args[i]) && i + 1 < args.length) {
@@ -38,19 +39,12 @@ public class Main {
                     // Handle invalid crashDelay input
                     System.err.println("Invalid crashDelay value");
                 }
+            } else if("-t".equals(args[i])) {
+                crashLeaderMidSequence = true;
             }
         }
 
-        // Print the extracted values
-        //System.out.println("Hostname: " + hostsfile);
-        //System.out.println("Start Delay: " + joinDelay);
-        //System.out.println("Crash Delay: " + crashDelay);
-
-
-        // Change to "hostsname.txt" when running on Docker
-        //String fileName = "docker-compose-testcases-and-hostsfile-lab3/hostsfile.txt";
-        String fileName = "hostsfile.txt";
-
+        String fileName = hostsfile;
         String myHostname = getMyHostname();
         StateValue state = new StateValue();
 
@@ -114,7 +108,8 @@ public class Main {
             TCPConnection connection = new TCPConnection(talk, listen);
             tcpConnections[tcpIndex] = connection;
 
-            UDPListenHeartbeat udpListenHeartbeat= new UDPListenHeartbeat(state, failureDetectorStartPort + index + 1, connectedPeer);
+
+            UDPListenHeartbeat udpListenHeartbeat= new UDPListenHeartbeat(state, failureDetectorStartPort + index + 1, connectedPeer, (index == 0));
             heartbeatListeners[tcpIndex] = udpListenHeartbeat;
 
             tcpIndex++;
@@ -166,16 +161,25 @@ public class Main {
 
         // Main program loop:
         // TODO: Move to separate function
+        runMembershipProtocol(state, tcpConnections, leaderConnection, joinDelay, crashDelay, myHostname, myPeerIndex, leader, numHosts, peers, crashLeaderMidSequence);
+
+    }
+
+    public static void runMembershipProtocol(StateValue state, TCPConnection[] tcpConnections,
+                                             TCPConnection leaderConnection, int joinDelay, int crashDelay,
+                                             String myHostname, int myPeerIndex, String leader, int numHosts,
+                                             List<String> peers, boolean crashLeaderMidSequence) {
         while(true) {
+
+            if(crashDelay > 0) {
+                final int finalCrashDelay = crashDelay;
+                new Thread(() -> crash(finalCrashDelay)).start();
+            }
+
+
             if(!state.sentJoinRequest) {
                 final int finalJoinDelay = joinDelay;
                 joinGroup(finalJoinDelay, leaderConnection);
-
-                if(crashDelay > 0) {
-                    final int finalCrashDelay = crashDelay;
-                    new Thread(() -> crash(finalCrashDelay)).start();
-                }
-
                 state.members.add(myHostname);
                 state.sentJoinRequest = true;
             }
@@ -183,6 +187,21 @@ public class Main {
             if(state.sendOkay) {
                 leaderConnection.talker.sendOkay = true;
                 state.sendOkay = false;
+            }
+
+            if(state.leaderTimedout) {
+                System.out.println("Detected leader failure...");
+
+                int newLeaderIndex = peers.indexOf(leader) + 1;
+                System.out.println("New leader: " +   newLeaderIndex);
+                leaderConnection =  tcpConnections[newLeaderIndex];
+
+                if(newLeaderIndex == myPeerIndex) {
+                    state.amLeader = true;
+                    state.leaderValues = new LeaderValues();
+                    state.leaderValues.sendNewLeader = true;
+                }
+
             }
 
             // Only things the leader should check..
@@ -251,8 +270,24 @@ public class Main {
 
                 }
 
+                if(crashLeaderMidSequence && state.members.size() == numHosts) {
+                    System.out.println("Crashing leader mid sequence...");
 
+                    // Delete last peer in membership (for no real reason, just a testcase)
+                    state.peerToDel = peers.get(peers.size() - 1);
 
+                    // Send DEL request to all members other than next leader (two)
+                    for(TCPConnection conn : tcpConnections) {
+                        if(!conn.talker.targetHostname.equals("two")) {
+                            conn.talker.sendDelReq = true;
+                        }
+                    }
+
+                    // Give each talker the chance to send the DEL message. Sleep time here is arbitrary
+                    sleep(2);
+
+                    System.exit(0);
+                }
             }
             sleep(0.01F);
 

@@ -7,6 +7,7 @@ import java.util.ArrayList;
  */
 public class StateValue {
 
+    public boolean leaderTimedout = false;
     boolean amLeader = false;
 
     // If this state is the leader and it should have all it's talkers send a REQ message

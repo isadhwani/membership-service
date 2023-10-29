@@ -7,6 +7,7 @@ public class HandleTimeout extends Thread {
 
     // Handle timeout must have access to the state to remove peers when they crash
     StateValue state;
+
     HandleTimeout(TimeoutData timeoutData, StateValue state) {
         this.timeoutData = timeoutData;
         this.state = state;
@@ -20,6 +21,11 @@ public class HandleTimeout extends Thread {
             if (currentTime - timeoutData.lastHeartbeatTimestamp > timeoutData.HEARTBEAT_TIMEOUT &&
                     timeoutData.lastHeartbeatTimestamp != 0) {
                 System.out.println("Peer " + timeoutData.listenHostname + " not reachable");
+
+                if (timeoutData.isLeader) {
+                    System.out.println("Leader " + timeoutData.listenHostname + " not reachable");
+                    state.leaderTimedout = true;
+                }
                 timeoutData.peerTimedout = true;
                 // Tells main to remove the peer this HandleTimeout class is listening for.
                 state.peerToDel = timeoutData.listenHostname;

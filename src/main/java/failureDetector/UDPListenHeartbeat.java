@@ -17,15 +17,18 @@ public class UDPListenHeartbeat extends Thread {
 
     String listenHostname = "";
 
-    public UDPListenHeartbeat(StateValue s, int listenPort, String listenHostname) {
+    // Is this heartbeat listener listening to the leader?
+    boolean isLeader = false;
+    public UDPListenHeartbeat(StateValue s, int listenPort, String listenHostname, boolean isLeader) {
         this.state = s;
         this.listenPort = listenPort;
         this.listenHostname = listenHostname;
+        this.isLeader = isLeader;
     }
 
     @Override
     public void run() {
-        TimeoutData timeoutData = new TimeoutData(0, listenHostname);
+        TimeoutData timeoutData = new TimeoutData(0, listenHostname, isLeader);
         HandleTimeout handleTimeout = new HandleTimeout(timeoutData, state);
         handleTimeout.start();
 
