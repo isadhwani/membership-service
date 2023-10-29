@@ -163,17 +163,17 @@ public class Main {
         // TODO: Move to separate function
         while(true) {
 
-            if(crashDelay > 0) {
-                final int finalCrashDelay = crashDelay;
-                new Thread(() -> crash(finalCrashDelay)).start();
-            }
-
-
             if(!state.sentJoinRequest) {
                 final int finalJoinDelay = joinDelay;
                 joinGroup(finalJoinDelay, leaderConnection);
                 state.members.add(myHostname);
                 state.sentJoinRequest = true;
+
+                // Start crash delay AFTER sending join request
+                if(crashDelay > 0) {
+                    final int finalCrashDelay = crashDelay;
+                    new Thread(() -> crash(finalCrashDelay)).start();
+                }
             }
 
             if(state.sendOkay) {
@@ -185,7 +185,7 @@ public class Main {
                 System.out.println("Detected leader failure...");
 
                 int newLeaderIndex = peers.indexOf(leader) + 1;
-                System.out.println("New leader: " +   newLeaderIndex);
+                System.out.println("New leader: " +   peers.get(newLeaderIndex));
                 leaderConnection =  tcpConnections[newLeaderIndex];
 
                 if(newLeaderIndex == myPeerIndex) {
@@ -193,6 +193,8 @@ public class Main {
                     state.leaderValues = new LeaderValues();
                     state.leaderValues.sendNewLeader = true;
                 }
+
+                state.leaderTimedout = false;
 
             }
 
