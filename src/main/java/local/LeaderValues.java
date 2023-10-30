@@ -8,4 +8,7 @@ public class LeaderValues {
     // INVARIANT: if amLeader = false, okayCount = 0
     int okayCount = 0;
 
+    boolean sendNewLeader = false;
+
+    //TODO: Move booleans for sending REQ messages here
 }
