@@ -23,13 +23,13 @@ public class HandleTimeout extends Thread {
                 System.out.println("Peer " + timeoutData.listenHostname + " not reachable");
 
                 if (timeoutData.isLeader) {
-                    System.out.println("Leader " + timeoutData.listenHostname + " not reachable");
+                    //System.out.println("Leader " + timeoutData.listenHostname + " not reachable");
                     state.leaderTimedout = true;
+                } else {
+                    // If the failed peer is not the leader, delete it from the membership service
+                    state.peerToDel = timeoutData.listenHostname;
+                    state.sendDelReq = true;
                 }
-                timeoutData.peerTimedout = true;
-                // Tells main to remove the peer this HandleTimeout class is listening for.
-                state.peerToDel = timeoutData.listenHostname;
-                state.sendDelReq = true;
 
                 break;
             }

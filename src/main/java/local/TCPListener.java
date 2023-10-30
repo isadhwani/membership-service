@@ -15,11 +15,14 @@ public class TCPListener extends Thread {
     String myHostname;
     String connectedHost;
 
-    TCPListener(StateValue s, String myHostname, String connectedHost, int port) {
+    String leader;
+
+    TCPListener(StateValue s, String myHostname, String connectedHost, int port, String leader) {
         this.port = port;
         this.myHostname = myHostname;
         this.state = s;
         this.connectedHost = connectedHost;
+        this.leader = leader;
     }
 
 
@@ -51,7 +54,7 @@ public class TCPListener extends Thread {
             String receivedMessages;
             while ((receivedMessages = reader.readLine()) != null) {
                 //System.out.println("Received from " + clientSocket.getInetAddress().getHostName() + ": " + receivedMessages);
-                System.out.println("Received: " + receivedMessages + " from " + connectedHost);
+                System.out.println("Received: " + receivedMessages);
 
                 String[] messages = receivedMessages.split("\\}\\{");
 
@@ -64,7 +67,7 @@ public class TCPListener extends Thread {
 
                     if (msgType.equals("JOIN")) {
                         if (state.amLeader) {
-                            System.out.println("Processed JOIN message and telling main to send ADD");
+                            //System.out.println("Processed JOIN message and telling main to send ADD");
                             state.sendAddReq = true;
                             state.peerToAdd = decoded.get("id");
                         }
@@ -76,11 +79,12 @@ public class TCPListener extends Thread {
                         state.sendOkay = true;
 
                         if (decoded.get("operation").equals("ADD")) {
-                            System.out.println("Received ADD request from " + decoded.get("id"));
+                           // System.out.println("Received ADD request from " + decoded.get("id"));
                             state.peerToAdd = decoded.get("peerToAdd");
-                        } else if(decoded.get("operation").equals("DEL")) {
-                            System.out.println("Received DEL request from " + decoded.get("id"));
-                            state.peerToDel = decoded.get("peerToRemove");
+                        } else if (decoded.get("operation").equals("DEL")) {
+                           // System.out.println("Received DEL request from " + decoded.get("id"));
+                            state.peerToDel = decoded.get("peerToDel");
+                            //System.out.println("Preparing to remove: " + state.peerToDel);
                         }
 
                     } else if (state.amLeader && msgType.equals("OK")) {
@@ -98,8 +102,26 @@ public class TCPListener extends Thread {
                         state.viewId++;
 
                         List<String> list = Arrays.asList(decoded.get("members").split(";"));
-                        state.members = new ArrayList<String>(list);
+                        state.members = new TreeSet<>(list);
                         System.out.println("Membership: " + state.members);
+                    } else if (msgType.equals("NEWLEADER")) {
+                        System.out.println("Received new leader, peerToDel: " + state.peerToDel);
+                        state.sendStatus = true;
+                        leader = decoded.get("id");
+
+                    } else if (state.amLeader && msgType.equals("STATUS")) {
+                        state.viewId = Integer.parseInt(decoded.get("viewId"));
+                        state.operationType = decoded.get("operation");
+
+                        if (decoded.get("operation").equals("ADD")) {
+                            System.out.println("Received ADD request from " + decoded.get("id"));
+                            state.peerToAdd = decoded.get("peerToAdd");
+                            state.sendAddReq = true;
+                        } else if (decoded.get("operation").equals("DEL")) {
+                            System.out.println("Received DEL request from " + decoded.get("id"));
+                            state.peerToDel = decoded.get("peerToDel");
+                            state.sendDelReq = true;
+                        }
                     }
                 }
             }

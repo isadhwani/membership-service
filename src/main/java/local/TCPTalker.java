@@ -23,10 +23,15 @@ public class TCPTalker extends Thread {
     boolean sendOkay = false;
 
     // Should this leader send a new view message?
-    // Invariant: if amLeader = false, sendNewView = false
+    // Invariant: if amLeader = false, sendNewView = false and sendNewLeader = false
     boolean sendNewView = false;
 
+    // send a response to a NEWLEADER message
+    public boolean sendStatus;
+
     boolean sendDelReq = false;
+
+    boolean sendNewLeader = false;
 
 
     public TCPTalker(StateValue s, String targetHostname, String myHostname, int port) {
@@ -65,7 +70,7 @@ public class TCPTalker extends Thread {
                 } else if (sendAddReq) {
                     String message = "{id: " + myHostname + ", requestId:" + state.requestId +
                             ", viewId:" + state.viewId + ", peerToAdd:" + state.peerToAdd +
-                            ", message:REQ, operation:ADD";
+                            ", message:REQ, operation:ADD}";
 
                     System.out.println("Sending ADD to " + targetHostname + ": " + message);
 
@@ -108,6 +113,40 @@ public class TCPTalker extends Thread {
                     System.out.println("Sending DEL to " + targetHostname + ": " + message);
 
                     sendDelReq = false;
+
+                    byte[] messageBytes = message.getBytes();
+                    outputStream.write(messageBytes);
+                    outputStream.flush();
+                } else if(sendNewLeader) {
+                    String message = "{id: " + myHostname + ", viewId:" + state.viewId +
+                            ", message:NEWLEADER, operation:PENDING}";
+
+                    System.out.println("Sending NEWLEADER to " + targetHostname + ": " + message);
+
+                    sendNewLeader = false;
+
+                    byte[] messageBytes = message.getBytes();
+                    outputStream.write(messageBytes);
+                    outputStream.flush();
+                } else if(sendStatus) {
+
+                    String operation = "NOTHING";
+                    String targetPeer = "";
+                    if(state.peerToDel != null) {
+                        operation = "DEL";
+                        targetPeer = ", peerToDel:" + state.peerToDel;
+
+                    } else if(state.peerToAdd != null) {
+                        operation = "ADD";
+                        targetPeer = ", peerToAdd:" + state.peerToAdd;
+                    }
+
+                    String message = "{id: " + myHostname + ", viewId:" + state.viewId +
+                            ", message:STATUS" + targetPeer + ", operation:" + operation + "}";
+
+                    System.out.println("Sending STATUS to " + targetHostname + ": " + message);
+
+                    sendStatus = false;
 
                     byte[] messageBytes = message.getBytes();
                     outputStream.write(messageBytes);
